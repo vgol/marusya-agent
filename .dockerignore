@@ -13,3 +13,7 @@ venv
 *.log
 **/*.pem
 **/*.key
+infra
+deploy
+.github
+**/ovh.conf

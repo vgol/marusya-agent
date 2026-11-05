@@ -1,0 +1,125 @@
+name: Build and deploy Hermes
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: hermes-vps-production
+  cancel-in-progress: false
+
+jobs:
+  ovh:
+    name: Verify OVHcloud API access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read the existing VPS using the official OVHcloud CLI
+        uses: docker://ovhcom/ovhcloud-cli:v0.16.0
+        env:
+          OVH_ENDPOINT: ovh-eu
+          OVH_APPLICATION_KEY: ${{ secrets.OVH_APPLICATION_KEY }}
+          OVH_APPLICATION_SECRET: ${{ secrets.OVH_APPLICATION_SECRET }}
+          OVH_CONSUMER_KEY: ${{ secrets.OVH_CONSUMER_KEY }}
+        with:
+          args: vps get vps-9ce61658.vps.ovh.ca -o json
+
+  build:
+    name: Build and publish the agent image
+    needs: ovh
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/vgol/marusya-agent@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        id: meta
+        with:
+          images: ghcr.io/vgol/marusya-agent
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: build
+        with:
+          context: .
+          platforms: linux/amd64
+          pull: true
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy from GHCR to the remote Docker host
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Configure SSH with a verified VPS host key
+        uses: shimataro/ssh-key-action@6b84f2e793b32fa0b03a379cadadec75cc539391 # v2.8.0
+        with:
+          key: ${{ secrets.VPS_SSH_KEY }}
+          name: id_ed25519
+          known_hosts: ${{ secrets.VPS_KNOWN_HOSTS }}
+          config: |
+            Host hermes-vps
+              HostName ${{ vars.VPS_HOST }}
+              User ${{ secrets.VPS_USER || 'ubuntu' }}
+              Port ${{ secrets.VPS_PORT || '22' }}
+              IdentityFile ~/.ssh/id_ed25519
+              IdentitiesOnly yes
+              StrictHostKeyChecking yes
+              BatchMode yes
+              ForwardAgent no
+              ConnectTimeout 15
+      - name: Refresh the VPS package index
+        run: ssh hermes-vps sudo -n apt-get update
+      - name: Ensure GitHub CLI is installed on the VPS
+        run: ssh hermes-vps sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y gh
+      - name: Create the remote Docker context
+        run: docker context create vps --docker host=ssh://hermes-vps
+      - uses: docker/setup-compose-action@2fe291b7677a45ee1269ec56a42604c143505e7e # v1
+        with:
+          version: v2.40.3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull and deploy the exact published image
+        run: docker --context vps compose -f deploy/compose.yaml up -d --pull always --force-recreate --wait --wait-timeout 180
+        env:
+          HERMES_IMAGE: ${{ needs.build.outputs.image }}
+          HERMES_CREDENTIALS: |
+            COPILOT_GITHUB_TOKEN=${{ secrets.COPILOT_GITHUB_TOKEN }}
+            GH_TOKEN=${{ secrets.HERMES_GITHUB_TOKEN }}
+      - name: Verify the deployed CLI
+        run: docker --context vps exec --user hermes hermes hermes --version
+      - name: Verify the agent's authenticated access to this project
+        run: docker --context vps exec --user hermes -e GH_TOKEN hermes gh repo view vgol/marusya-agent --json nameWithOwner
+        env:
+          GH_TOKEN: ${{ secrets.HERMES_GITHUB_TOKEN }}
+      - name: Verify live Copilot inference
+        run: docker --context vps exec --user hermes hermes timeout 180 hermes chat --quiet --oneshot --query 'Reply with exactly HERMES_DEPLOY_OK. Do not use any tools.' | grep -Fx HERMES_DEPLOY_OK

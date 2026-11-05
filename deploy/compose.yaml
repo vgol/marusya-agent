@@ -1,0 +1,25 @@
+name: marusya
+
+services:
+  agent:
+    image: ${HERMES_IMAGE:?Set the published GHCR image digest}
+    container_name: hermes
+    restart: unless-stopped
+    volumes:
+      - data:/opt/data
+    secrets:
+      - source: credentials
+        target: /etc/hermes/.env
+        mode: 0444
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  data:
+
+secrets:
+  credentials:
+    environment: HERMES_CREDENTIALS
