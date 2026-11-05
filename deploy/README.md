@@ -11,7 +11,8 @@ the image build.
 The manually triggered [workflow](../.github/workflows/deploy-hermes.yml):
 
 1. Checks all required GitHub settings and reports missing names together,
-   before building an image or accessing the VPS. Values are never logged.
+   before building an image or accessing the VPS. The check reports names,
+   not values.
 2. Verifies read-only VPS API access using OVHcloud's official CLI container.
 3. Uses Docker's official Actions to build/cache/publish to
    `ghcr.io/vgol/marusya-agent`, with GitHub Actions layer caching.
@@ -85,7 +86,17 @@ prompted, and reconnect after OVH closes that first session. Install/test your
 personal public SSH key before disabling password login. Use sudo for
 administration; do not enable root SSH login.
 
-Create a separate unencrypted deployment key on your computer:
+If `VPS_SSH_KEY` is already configured, do not replace the key pair merely
+because you are using another computer. Retrieve `VPS_SSH_PUBLIC_KEY` from
+GitHub and authorize it in the deployment user's `~/.ssh/authorized_keys`
+through the VPS console or an already trusted SSH session:
+
+```sh
+gh variable get VPS_SSH_PUBLIC_KEY --repo vgol/marusya-agent
+```
+
+Only for a new key pair, create a separate unencrypted deployment key on your
+setup computer:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/marusya-deploy -C github-actions-marusya
