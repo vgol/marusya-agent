@@ -10,18 +10,49 @@ the image build.
 
 The manually triggered [workflow](../.github/workflows/deploy-hermes.yml):
 
-1. Verifies read-only VPS API access using OVHcloud's official CLI container.
-2. Uses Docker's official Actions to build/cache/publish to
+1. Checks all required GitHub settings and reports missing names together,
+   before building an image or accessing the VPS. Values are never logged.
+2. Verifies read-only VPS API access using OVHcloud's official CLI container.
+3. Uses Docker's official Actions to build/cache/publish to
    `ghcr.io/vgol/marusya-agent`, with GitHub Actions layer caching.
-3. Configures verified SSH access using an existing SSH setup Action.
-4. Ensures GitHub CLI is installed on the VPS using Ubuntu's package manager.
-5. Uses native Docker Compose over an SSH Docker context to pull and start
+4. Configures verified SSH access using an existing SSH setup Action.
+5. Ensures GitHub CLI is installed on the VPS using Ubuntu's package manager.
+6. Uses native Docker Compose over an SSH Docker context to pull and start
    the **exact GHCR digest** built by that run.
-6. Verifies container health, the CLI, authenticated GitHub project access and
+7. Verifies container health, the CLI, authenticated GitHub project access and
    an actual Copilot response.
 
 There is no Ansible, Terraform dependency, custom deployment script, image
 transfer by SCP, host Hermes installation or public application port.
+
+## Deployment does not depend on a Codespace
+
+Deployment runs on GitHub-hosted runners. It does not read a Codespace's
+`ovh.conf`, SSH files, GitHub login or environment variables. Once setup is
+complete, you can delete the Codespace and run the workflow from GitHub's web
+interface or any authenticated GitHub CLI.
+
+Configure these repository settings under **Settings > Secrets and variables >
+Actions**:
+
+| Kind | Name | Purpose |
+| --- | --- | --- |
+| Variable | `VPS_HOST` | VPS public address |
+| Secret | `VPS_SSH_KEY` | Deployment SSH private key |
+| Secret | `VPS_KNOWN_HOSTS` | Verified SSH host-key entry, not just its fingerprint |
+| Secret | `OVH_APPLICATION_KEY` | OVH API application key |
+| Secret | `OVH_APPLICATION_SECRET` | OVH API application secret |
+| Secret | `OVH_CONSUMER_KEY` | Validated read-only OVH consumer key |
+| Secret | `COPILOT_GITHUB_TOKEN` | Agent's Copilot credential |
+| Secret | `HERMES_GITHUB_TOKEN` | Agent's repository-scoped GitHub credential |
+| Optional secret | `VPS_USER` | SSH user; defaults to `ubuntu` |
+| Optional secret | `VPS_PORT` | SSH port; defaults to `22` |
+| Optional variable | `VPS_SSH_PUBLIC_KEY` | Public half of the deployment key, for initial VPS authorization |
+
+GitHub Secrets persist independently of the computer used to upload them.
+They do not automatically install Docker or authorize the SSH key on the VPS;
+those are one-time server setup steps. OVH API credentials cannot replace
+the server's SSH credentials.
 
 ## Configure the VPS address
 
@@ -61,13 +92,40 @@ ssh-keygen -t ed25519 -f ~/.ssh/marusya-deploy -C github-actions-marusya
 ssh-copy-id -i ~/.ssh/marusya-deploy.pub "ubuntu@$VPS_HOST"
 ```
 
-Verify the host fingerprint through OVH's authenticated KVM console:
+Store the public half as a variable if you need to finish initial setup from
+another computer:
 
 ```sh
-sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+gh variable set VPS_SSH_PUBLIC_KEY --repo vgol/marusya-agent < ~/.ssh/marusya-deploy.pub
+gh variable get VPS_SSH_PUBLIC_KEY --repo vgol/marusya-agent
 ```
 
-Then locally capture the host key and compare fingerprints:
+The public key must be authorized for the deployment user on the VPS, while
+its matching private key must be uploaded as `VPS_SSH_KEY`.
+
+**Run the following on the VPS itself**, using OVH's authenticated KVM console
+or an already trusted SSH session, not a Codespace or your local computer:
+
+```sh
+sudo sshd -T
+```
+
+Find a `hostkey` line in that output. Use its actual file path to calculate
+the fingerprint, for example:
+
+```sh
+sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key
+```
+
+This reads the host key to print its fingerprint, not its private contents.
+The `.pub` companion is not required. If the example path does not exist,
+use a path reported by `sshd -T`; do not generate or replace a working server's
+host keys. A machine without `sshd`, or without any configured host key files,
+is not ready for deployment SSH access.
+
+Then, **on your setup computer**, capture the matching host key and compare
+fingerprints. This example uses the ED25519 host key; change `-t ed25519` to
+`-t rsa` or `-t ecdsa` if that is the host key verified on the VPS:
 
 ```sh
 ssh-keyscan -p 22 -t ed25519 "$VPS_HOST" > /tmp/marusya-known-hosts
@@ -75,7 +133,9 @@ ssh-keygen -lf /tmp/marusya-known-hosts
 ```
 
 Only use that file after the fingerprint matches. `ssh-keyscan` alone does not
-establish trust. The workflow never disables host-key checking.
+establish trust. Upload the verified file as `VPS_KNOWN_HOSTS` using the command
+in section 3; subsequent deployments need neither the file nor the setup
+computer. The workflow never disables host-key checking.
 
 Allow inbound SSH in both VPS and OVH firewalls. GitHub-hosted runners do not
 have one fixed source IP. No Hermes application port needs to be opened.
