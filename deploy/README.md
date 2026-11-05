@@ -126,8 +126,15 @@ private key as the deployment key.
 
 Create credentials at <https://eu.api.ovh.com/createToken/> restricted to:
 
-- `GET /vps/vps-9ce61658.vps.ovh.ca`
-- `GET /vps/vps-9ce61658.vps.ovh.ca/*`
+| Method | Path |
+| --- | --- |
+| `GET` | `/vps/vps-9ce61658.vps.ovh.ca` |
+| `GET` | `/vps/vps-9ce61658.vps.ovh.ca/*` |
+
+Select `GET` in the method field and enter only the `/vps/...` value in the
+path field. Do not prefix the path with `GET `: OVH stores that text literally,
+and requests then fail with `403: This call has not been granted`. Include
+both the exact VPS path and its subpaths.
 
 The account uses `ovh-eu`, irrespective of the VPS being in Canada. No order,
 payment, rebuild, termination or write permission is needed. Each command
