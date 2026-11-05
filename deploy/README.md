@@ -22,7 +22,7 @@ The manually triggered [workflow](../.github/workflows/deploy-hermes.yml):
 7. Verifies container health, the CLI, authenticated GitHub project access and
    an actual Copilot response.
 
-There is no Ansible, Terraform dependency, custom deployment script, image
+There is no Ansible, custom deployment script, image
 transfer by SCP, host Hermes installation or public application port.
 
 ## Deployment does not depend on a Codespace
