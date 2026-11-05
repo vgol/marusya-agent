@@ -14,9 +14,19 @@ session data should stay outside version control.
 
 ## Current scope
 
-The repository currently provides a development container and Terraform
-configuration that adopts a manually ordered OVHcloud VPS by import. The
-configuration never orders servers, and no agent deployment exists yet.
+The repository provides a development container, optional Terraform for an
+existing OVHcloud VPS, and a manually triggered Hermes build/deployment
+workflow. Terraform is not required for deployment, and nothing orders servers.
+
+## Deploy Hermes
+
+The [deployment guide](deploy/README.md) covers initial OVHcloud SSH access,
+GitHub Secrets and running **Build and deploy Hermes**. Docker's official
+Actions build and cache our [derived image](Dockerfile), then publish it to
+GHCR. Docker Compose connects over verified SSH and pulls the exact image
+digest onto the Docker-enabled VPS. Hermes includes GitHub Copilot support and
+authenticated access to this project; CLI access is over SSH only, without
+public application ports.
 
 ## Getting started
 

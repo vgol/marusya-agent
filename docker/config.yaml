@@ -1,0 +1,6 @@
+model:
+  provider: copilot
+  default: gpt-6.1-sol
+terminal:
+  backend: local
+  cwd: /opt/data/workspace
