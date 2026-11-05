@@ -5,15 +5,6 @@
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"HashiCorp.terraform",
-				"hashicorp.terraform"
-			]
-		}
-	},
-
 	"features": {
 		"ghcr.io/devcontainers/features/common-utils:2": {
 			"installZsh": true,
@@ -38,11 +29,6 @@
 			"installDirectlyFromGitHubRelease": true,
 			"version": "latest"
 		},
-		"ghcr.io/devcontainers/features/terraform:1": {
-			"version": "latest",
-			"tflint": "none",
-			"terragrunt": "none"
-		},
 		"ghcr.io/devcontainers-extra/features/devcontainers-cli:1": {
 			"version": "latest"
 		},
@@ -57,8 +43,6 @@
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "docker --version",
-
-	// The Terraform feature also installs the HashiCorp.terraform VS Code extension.
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"

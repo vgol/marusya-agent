@@ -20,6 +20,28 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Validate deployment configuration
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          OVH_APPLICATION_KEY: ${{ secrets.OVH_APPLICATION_KEY }}
+          OVH_APPLICATION_SECRET: ${{ secrets.OVH_APPLICATION_SECRET }}
+          OVH_CONSUMER_KEY: ${{ secrets.OVH_CONSUMER_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          HERMES_GITHUB_TOKEN: ${{ secrets.HERMES_GITHUB_TOKEN }}
+        with:
+          script: |
+            const required = [
+              'VPS_HOST', 'VPS_SSH_KEY', 'VPS_KNOWN_HOSTS',
+              'OVH_APPLICATION_KEY', 'OVH_APPLICATION_SECRET', 'OVH_CONSUMER_KEY',
+              'COPILOT_GITHUB_TOKEN', 'HERMES_GITHUB_TOKEN',
+            ];
+            const missing = required.filter(name => !process.env[name]?.trim());
+            if (missing.length) {
+              core.setFailed(`Missing GitHub Actions configuration: ${missing.join(', ')}. See deploy/README.md.`);
+            }
       - name: Read the existing VPS using the official OVHcloud CLI
         uses: docker://ovhcom/ovhcloud-cli:v0.16.0
         env:

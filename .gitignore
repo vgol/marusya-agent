@@ -219,7 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Terraform
+# Legacy infrastructure artifacts (may contain credentials or private state)
 .terraform/
 *.tfstate
 *.tfstate.*
